@@ -1,9 +1,11 @@
 #tinyCA2 - version 0.7.5-7
 To be able to create certificate requests/certificates with utf8 support, add this lines to openssl.conf to [ req ] section
 
-**string_mask = utf8only
+**
+string_mask = utf8only
 utf8 = yes
 **
+
 #tinyCA2 - version 0.7.5-3
 
 This is a "fork" from debian sources.
