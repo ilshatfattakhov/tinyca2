@@ -59,7 +59,7 @@ sub get_req_create {
          GUI::HELPERS::print_error($t);
       }
       $opts->{'bits'}   = 4096;
-      $opts->{'digest'} = 'sha1';
+      $opts->{'digest'} = 'sha256';
       $opts->{'algo'}   = 'rsa';
       if(defined($opts) && $opts eq "sign") {
          $opts->{'sign'} = 1;
@@ -160,7 +160,7 @@ sub create_req {
          'outfile' => $keyfile,
          'pass'    => $opts->{'passwd'}
          );
-
+   
    if (not -s $keyfile || $ret) { 
       unlink($keyfile);
       GUI::HELPERS::set_cursor($main, 0);
@@ -176,6 +176,7 @@ sub create_req {
    } else {
       push(@dn, $opts->{'OU'});
    }
+   
    @dn = (@dn, $opts->{'CN'}, $opts->{'EMAIL'}, '', '');
    ($ret, $ext) = $self->{'OpenSSL'}->newreq(
          'config'   => $main->{'CA'}->{$ca}->{'cnf'},
@@ -426,6 +427,12 @@ sub get_sign_req {
          $opts->{'digest'} = "md5";
       } elsif ($opts->{'digest'} =~ /^sha1/) {
          $opts->{'digest'} = "sha1";
+      } elsif ($opts->{'digest'} =~ /^sha256/) {
+         $opts->{'digest'} = "sha256";
+      } elsif ($opts->{'digest'} =~ /^sha384/) {
+         $opts->{'digest'} = "sha384";
+      } elsif ($opts->{'digest'} =~ /^sha512/) {
+         $opts->{'digest'} = "sha512";
       } elsif ($opts->{'digest'} =~ /^ripemd160/) {
          $opts->{'digest'} = "ripemd160";
       } else {
@@ -762,7 +769,7 @@ sub parse_req {
    GUI::HELPERS::set_cursor($main, 1);
 
    $ca = $main->{'CA'}->{'actca'};
-
+   
    $reqfile = $main->{'CA'}->{$ca}->{'dir'}."/req/".$name.".pem";
 
    $parsed = $self->{'OpenSSL'}->parsereq($main->{'CA'}->{$ca}->{'cnf'},

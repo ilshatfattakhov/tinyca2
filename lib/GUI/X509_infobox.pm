@@ -20,6 +20,9 @@
 use strict;
 package GUI::X509_infobox;
 
+use utf8;
+use Encode;
+
 use HELPERS;
 use GUI::HELPERS;
 use GUI::WORDS;
@@ -89,6 +92,15 @@ sub display {
             _("Fingerprint (SHA1)").": ".$parsed->{'FINGERPRINTSHA1'},
             'center', 0, 0);
       $self->{'x509textbox'}->pack_start($self->{'certfingerprintsha1'}, 
+            0, 0, 0);
+
+      if(defined($self->{'certfingerprintsha256'})) {
+         $self->{'certfingerprintsha256'}->destroy();
+      }
+      $self->{'certfingerprintsha256'} = GUI::HELPERS::create_label(
+            _("Fingerprint (SHA256)").": ".$parsed->{'FINGERPRINTSHA256'},
+            'center', 0, 0);
+      $self->{'x509textbox'}->pack_start($self->{'certfingerprintsha256'},
             0, 0, 0);
    }
 
@@ -203,13 +215,11 @@ sub _create_detail_table {
             foreach(@{$parsed->{$f}}) {
                $iter = $store->append();
                $store->set($iter, 0 => $words->{$f}, 1 => $_);
-               # print STDERR "DEBUG: add line: @l\n";
-               
+              
             }
          }else{
-            # print STDERR "DEBUG: add line: @l\n";
             $iter = $store->append();
-            $store->set($iter, 0 => $words->{$f}, 1 => $parsed->{$f});
+            $store->set($iter, 0 => $words->{$f}, 1 =>Encode::decode_utf8($parsed->{$f}));
          }
       }
    }

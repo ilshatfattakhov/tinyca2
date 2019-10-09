@@ -19,6 +19,10 @@
 use strict;
 package GUI;
 
+use utf8;
+
+use Encode;
+
 use POSIX;
 
 use Gtk2::SimpleMenu;
@@ -29,14 +33,17 @@ my $true=1;
 # This hash maps our internal MD names to the displayed digest names.
 # Maybe it should live in a crypto-related file instead of a UI-related file?
 my %md_algorithms = (
-		     'md5' => 'MD5',
-		     'sha1' => 'SHA1',
-		     'md2' => 'MD2',
-		     'mdc2' => 'MDC2',
-		     'md4' => 'MD4',
+		     'md5' => 'ins.MD5',
+# duplicate	     'sha1' => 'SHA1',
+# n/a		     'md2' => 'MD2',
+# n/a		     'mdc2' => 'MDC2',
+		     'md4' => 'ins.MD4',
 		     'ripemd160' => 'RIPEMD-160',
 #		     'sha' => 'SHA',
 		     'sha1' => 'SHA-1',
+		     'sha256' => 'SHA-256',
+		     'sha384' => 'SHA-384',
+		     'sha512' => 'SHA-512',
 		     );
 
 my %bit_lengths = (
@@ -742,7 +749,6 @@ sub show_text {
    }
 
    $name = HELPERS::enc_base64($name);
-
    if($mode eq 'req') {
       $parsed = $self->{'REQ'}->parse_req( $self, $name);
    } elsif($mode eq 'cert') {
@@ -863,7 +869,9 @@ sub show_details {
    } elsif($mode eq 'cert' || $mode eq 'CA') {
       $parsed = $self->{'CERT'}->parse_cert( $self, $name);
    }
-
+   # ILSHAT
+   # use Data::Dumper;
+   # print STDERR Dumper($parsed);
    defined($parsed) || GUI::HELPERS::print_error(_("Can't read file"));
 
    $t = $mode eq 'req'?_("Request Details"):_("Certificate Details");
@@ -937,6 +945,7 @@ sub show_import_verification {
 # create tree with details (cert/req)
 #
 sub create_detail_tree {
+
    my ($self, $parsed, $mode) = @_;
 
    # print STDERR "DEBUG: create_detail_tree called with mode $mode\n";
@@ -966,9 +975,12 @@ sub create_detail_tree {
 
    $tree_scrolled->add_with_viewport($tree);
 
+   # print STDERR "ILSHAT: parsed->CN $parsed->{'CN'}\n";
+   # use Data::Dumper;
+   # print STDERR Dumper($parsed);
    $t = $mode eq 'req'?_("Request Details"):_("Certificate Details"); 
    $t .= " - $parsed->{'CN'}";
-   
+   $t = Encode::decode_utf8($t);
    $root = $store->append(undef);
    $store->set($root, 0 => $t);
 
@@ -978,20 +990,20 @@ sub create_detail_tree {
    $piter = $store->append($root);
    $store->set($piter, 0 => $t);
 
-   for my $l qw(CN EMAIL O OU C ST L) {
+   for my $l (qw(CN EMAIL O OU C ST L)) {
       if(defined($parsed->{$l})) {
          if($l eq "OU") {
             foreach my $ou (@{$parsed->{'OU'}}) {
                $citer = $store->append($piter);
                $store->set($citer, 
                      0 => $self->{'words'}{$l}, 
-                     1 => $ou);
+                     1 => Encode::decode_utf8($ou));
             }
          } else {
             $citer = $store->append($piter);
             $store->set($citer, 
                   0 => $self->{'words'}{$l}, 
-                  1 => $parsed->{$l});
+                  1 => Encode::decode_utf8($parsed->{$l}));
          }
       }
    }
@@ -1003,7 +1015,7 @@ sub create_detail_tree {
       $piter = $store->append($root);
       $store->set($piter, 0 => $t);
    
-      for my $l qw(CN EMAIL O OU C ST L) {
+      for my $l (qw(CN EMAIL O OU C ST L)) {
          if(defined($parsed->{'ISSUERDN'}->{$l})) {
             if($l eq "OU") {
                foreach my $ou (@{$parsed->{'ISSUERDN'}->{'OU'}}) {
@@ -1029,7 +1041,7 @@ sub create_detail_tree {
       $piter = $store->append($root);
       $store->set($piter, 0 => $t);
    
-      for my $l qw(STATUS NOTBEFORE NOTAFTER) {
+      for my $l (qw(STATUS NOTBEFORE NOTAFTER)) {
          if(defined($parsed->{$l})) {
             $citer = $store->append($piter);
             $store->set($citer, 
@@ -1045,7 +1057,7 @@ sub create_detail_tree {
    $store->set($piter, 0 => $t);
 
 
-   for my $l qw(STATUS SERIAL KEYSIZE PK_ALGORITHM SIG_ALGORITHM TYPE) {
+   for my $l (qw(STATUS SERIAL KEYSIZE PK_ALGORITHM SIG_ALGORITHM TYPE)) {
       if(defined($parsed->{$l})) {
          $citer = $store->append($piter);
          $store->set($citer, 
@@ -1060,7 +1072,7 @@ sub create_detail_tree {
       $piter = $store->append($root);
       $store->set($piter, 0 => $t);
    
-      for my $l qw(FINGERPRINTMD5 FINGERPRINTSHA1) {
+      for my $l (qw(FINGERPRINTMD5 FINGERPRINTSHA1 FINGERPRINTSHA256 FINGERPRINTSHA384 FINGERPRINTSHA512)) {
          if(defined($parsed->{$l})) {
             $citer = $store->append($piter);
             $store->set($citer, 
@@ -1123,6 +1135,9 @@ sub create_detail_tree {
       }
    }
    $tree->expand_to_path(Gtk2::TreePath->new_first());
+   
+   # use Data::Dumper;
+   # print STDERR Dumper($tree_scrolled);
 
    return($tree_scrolled);
 }
@@ -1249,7 +1264,7 @@ sub show_req_dialog {
    # table for request data
    my $cc=0;
    my $ous = 1;
-   if(defined($opts->{'OU'})) {
+   if(defined($opts->{'OU'}) and ref($opts->{'OU'}) eq 'ARRAY') {
       $ous = @{$opts->{'OU'}} - 1;
    }
    $reqtable = Gtk2::Table->new(1, 13 + $ous, 0);
@@ -1297,7 +1312,7 @@ sub show_req_dialog {
          _("Organization Name (eg. company):"),
          \$opts->{'O'}, $reqtable, 10, 1);
 
-   if(defined($opts->{'OU'})) {
+   if(defined($opts->{'OU'}) and ref($opts->{'OU'}) eq 'ARRAY') {
       foreach my $ou (@{$opts->{'OU'}}) {
          $entry = GUI::HELPERS::entry_to_table(
                _("Organizational Unit Name (eg. section):"),
@@ -2521,7 +2536,7 @@ sub about {
    my ($aboutdialog, $href, $label);
 
    $aboutdialog = Gtk2::AboutDialog->new();
-   $aboutdialog->set_name("TinyCA2");
+   $aboutdialog->set_program_name("TinyCA2");
    $aboutdialog->set_version($main->{'version'});
    $aboutdialog->set_copyright("2002-2006 Stephan Martin");
    $aboutdialog->set_license("GNU Public License (GPL)");
@@ -2534,6 +2549,8 @@ sub about {
          _("French: Thibault Le Meur <Thibault.Lemeur\@supelec.fr>"));
 
    $aboutdialog->show_all();
+   $aboutdialog->run;
+   $aboutdialog->destroy;
 
    return;
 }
@@ -2634,7 +2651,7 @@ sub show_req_date_warning {
 
    my ($box, $button_ok, $button_cancel, $t);
 
-   $t = _("The Certificate will be longer valid than your CA!");
+   $t = _("The certificate will be valid longer than its CA!");
    $t .= "\n";
    $t .= _("This may cause problems with some software!!");
 
@@ -3094,9 +3111,9 @@ sub _fill_radiobox {
    for $value (keys %values) {
       my $display_name = $values{$value};
       my $key = Gtk2::RadioButton->new($previous_key, $display_name);
-      $key->set_active(1) if(defined($$var) && $$var eq $value);
       $key->signal_connect('toggled' =>
 			   sub{GUI::CALLBACK::toggle_to_var($key, $var, $value)});
+      $key->set_active(1) if(defined($$var) && $$var eq $value);
       $radiobox->add($key);
       $previous_key = $key;
    }

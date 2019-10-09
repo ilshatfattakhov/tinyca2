@@ -18,6 +18,8 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111, USA.
 
 use strict;
+use utf8;
+use Encode;
 package HELPERS;
 
 use POSIX;
@@ -34,7 +36,7 @@ sub gen_name {
 
    my $name = '';
 
-   foreach (qw(CN EMAIL OU O L ST C)) {
+   foreach (qw(CN EMAIL O L ST C)) {
       if((not defined($opts->{$_})) || ($opts->{$_} eq '')) {
          $opts->{$_} = ".";
       }
@@ -255,7 +257,7 @@ my %output = ();        # uniq on the fly
 
 sub enc_base64 {
 	my $data = shift;
-	my $ret = MIME::Base64::encode($data, '');
+	my $ret = MIME::Base64::encode(utf8::is_utf8($data) ? Encode::encode_utf8($data) : $data, '');
 	$ret =~ tr/\/+/-_/;
     return $ret;
 }
@@ -263,7 +265,10 @@ sub enc_base64 {
 sub dec_base64 {
 	my $data = shift;
 	$data =~ tr/-_/\/+/;
-	return MIME::Base64::decode($data);	
+  print STDOUT "DEBUG: dec_base64 $data\n";
+  print STDOUT MIME::Base64::decode(utf8::is_utf8($data) ? Encode::decode_utf8($data) : $data);
+  print STDOUT "\n";
+	return MIME::Base64::decode(utf8::is_utf8($data) ? Encode::decode_utf8($data) : $data);	
 }
 
 

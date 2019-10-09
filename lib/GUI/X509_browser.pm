@@ -20,6 +20,9 @@
 use strict;
 package GUI::X509_browser;
 
+use utf8;
+use Encode;
+
 use HELPERS;
 use GUI::HELPERS;
 use GUI::X509_infobox;
@@ -155,7 +158,6 @@ sub add_list {
    my ($x509listwin, @titles, @certtitles, @reqtitles, @keytitles, $column,
          $color, $text, $iter, $renderer);
 
-   # printf STDERR "AddList: Self: $self, Dir $directory, CRL $crlfile, Index: $indexfile\n";
 
    @reqtitles = (_("Common Name"),
                  _("eMail Address"),
@@ -266,7 +268,9 @@ sub add_list {
    for(my $i = 0; $titles[$i]; $i++) {
       $renderer = Gtk2::CellRendererText->new();
       $column = Gtk2::TreeViewColumn->new_with_attributes( 
-            $titles[$i], $renderer, 'text' => $i); 
+            $titles[$i], $renderer, 'text' => $i);
+      #Encode::decode_utf8($i)
+
       $column->set_sort_column_id($i);
       $column->set_resizable(1);
       if (($i == 7) && ($self->{'mode'} eq 'cert')) {
@@ -277,6 +281,7 @@ sub add_list {
                $cell->set (text => $text, foreground => $color);
                });
       }
+      
       $self->{'x509clist'}->append_column($column); 
    }
 
@@ -338,10 +343,10 @@ sub update_req {
       @line = split(/\:/, $name);
       $iter = $self->{'x509store'}->append();
       $self->{'x509store'}->set($iter, 
-            0 => $line[0], 
+            0 => Encode::decode_utf8($line[0]), 
             1 => $line[1], 
             2 => $line[2],
-            3 => $line[3], 
+            3 => Encode::decode_utf8($line[3]), 
             4 => $line[4], 
             5 => $line[5], 
             6 => $line[6], 
@@ -370,10 +375,10 @@ sub update_cert {
        @line = split(/\:/, $name);
        $iter = $self->{'x509store'}->append();
        $self->{'x509store'}->set($iter, 
-             0 => $line[0], 
+             0 => Encode::decode_utf8($line[0]), 
              1 => $line[1], 
              2 => $line[2],
-             3 => $line[3], 
+             3 => Encode::decode_utf8($line[3]), 
              4 => $line[4], 
              5 => $line[5], 
              6 => $line[6], 
@@ -410,7 +415,7 @@ sub update_key {
        @line = split(/\:/, $name);
        $iter = $self->{'x509store'}->append();
        $self->{'x509store'}->set($iter, 
-             0 => $line[0], 
+             0 => Encode::decode_utf8($line[0]), 
              1 => $line[1], 
              2 => $line[2],
              3 => $line[3], 
@@ -544,7 +549,6 @@ sub destroy {
 sub _fill_info {
    my ($self) = @_;
 
-   # print STDERR "DEBUG: fill_info: @_\n";
    update_info($self) if (defined $self->{'infowin'});
 }
 
@@ -624,7 +628,7 @@ sub selection_cadir {
 
   $dir = $self->{'actdir'};
   # cut off the last directory name to provide the ca-directory
-  $dir =~ s/\/certs|\/req|\/keys$//;
+  $dir =~ s/(\/certs|\/req|\/keys)$//;
   return($dir);
 }
 
@@ -656,7 +660,6 @@ sub selection_cn {
            _("Invalid browser mode for selection_cn():"." "
               .$self->{'mode'}));
   }
-
   return($cn);
 }
 

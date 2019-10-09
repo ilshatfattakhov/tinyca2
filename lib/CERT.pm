@@ -480,6 +480,9 @@ sub export_cert {
          $out = '';
          $out .= "Fingerprint (MD5): $opts->{'parsed'}->{'FINGERPRINTMD5'}\n";
          $out .= "Fingerprint (SHA1): $opts->{'parsed'}->{'FINGERPRINTSHA1'}\n\n";
+         $out .= "Fingerprint (SHA256): $opts->{'parsed'}->{'FINGERPRINTSHA256'}\n\n";
+         $out .= "Fingerprint (SHA384): $opts->{'parsed'}->{'FINGERPRINTSHA384'}\n\n";
+         $out .= "Fingerprint (SHA512): $opts->{'parsed'}->{'FINGERPRINTSHA512'}\n\n";
       } else {
          $out = '';
       }
@@ -660,7 +663,8 @@ sub reread_cert {
    GUI::HELPERS::set_cursor($main, 1);
 
    $name = HELPERS::enc_base64($name);
-      
+   
+
    $parsed = $self->parse_cert($main, $name, 1);
 
    # print STDERR "DEBUG: status $parsed->{'STATUS'}\n";

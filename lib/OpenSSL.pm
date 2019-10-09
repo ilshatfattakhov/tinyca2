@@ -22,6 +22,7 @@ package OpenSSL;
 
 use POSIX;
 use IPC::Open3;
+use IO::Select;
 use Time::Local;
 
 sub new {
@@ -41,7 +42,7 @@ sub new {
    close(TEST);
 
    # set version (format: e.g. 0.9.7 or 0.9.7a)
-   if($v =~ /\b(0\.9\.[678][a-z]?)\b/) {
+   if($v =~ /\b(0\.9\.[6-9][a-z]?)\b/ || $v =~ /\b(1\.0\.[01][a-z]?)\b/) {
       $self->{'version'} = $1;
    }
 
@@ -136,6 +137,7 @@ sub signreq {
    my ($ext, $cmd, $pid, $ret);
 
    $cmd = "$self->{'bin'} ca -batch";
+   $cmd .= " -utf8";
    $cmd .= " -passin env:SSLPASS -notext";
    $cmd .= " -config $opts->{'config'}";
    $cmd .= " -name $opts->{'caname'}" if($opts->{'caname'} ne "");
@@ -307,17 +309,18 @@ sub newreq {
    my ($ext, $ret, $cmd, $pid);
 
    $cmd = "$self->{'bin'} req -new";
+   $cmd .= " -utf8 -nameopt multiline,utf8";
    $cmd .= " -keyform PEM";
    $cmd .= " -outform PEM";
    $cmd .= " -passin env:SSLPASS";
 
    $cmd .= " -config $opts->{'config'}";
    $cmd .= " -out $opts->{'outfile'}";
-   $cmd .= " -key $opts->{'keyfile'}";
+   $cmd .= " -keyout $opts->{'keyfile'}";
    $cmd .= " -"."$opts->{'digest'}";
 
    $ENV{'SSLPASS'} = $opts->{'pass'};
-   print "DEBUG call: $cmd\n";
+   $cmd .= " -passout env:SSLPASS";
    
    my($rdfh, $wtfh);
    $ext = "$cmd\n\n";
@@ -561,7 +564,6 @@ sub parsecert {
       # print "DEBUG: use cached certificate $file\n";
       return($self->{'CACHE'}->{$file});
    }
-   # print "DEBUG: parse certificate $file\n";
 
    open(IN, $file) || do {
       $t = sprintf("Can't open Certificate '%s': %s", $file, $!);
@@ -572,7 +574,7 @@ sub parsecert {
    # convert certificate to PEM, DER and TEXT
    $tmp->{'PEM'} .= $_ while(<IN>);
    ($ret, $tmp->{'TEXT'}, $ext) = $self->convdata(
-         'cmd'     => 'x509',
+         'cmd'     => 'x509 -nameopt utf8',
          'data'    => $tmp->{'PEM'},
          'inform'  => 'PEM',
          'outform' => 'TEXT'
@@ -585,7 +587,7 @@ sub parsecert {
    }
    
    ($ret, $tmp->{'DER'}, $ext) = $self->convdata(
-         'cmd'     => 'x509',
+         'cmd'     => 'x509 -nameopt utf8',
          'data'    => $tmp->{'PEM'},
          'inform'  => 'PEM',
          'outform' => 'DER'
@@ -673,8 +675,49 @@ sub parsecert {
       GUI::HELPERS::print_warning($t, $ext);
    }
 
+   $cmd = "$self->{'bin'} x509 -noout -fingerprint -sha256 -in $file";
+   $ext = "$cmd\n\n";
+   $pid = open3($wtfh, $rdfh, $rdfh, $cmd);
+   while(<$rdfh>){
+      $ext .= $_;
+      ($k, $v) = split(/=/);
+      $tmp->{'FINGERPRINTSHA256'} = $v if($k =~ /SHA256 Fingerprint/i);
+      chomp($tmp->{'FINGERPRINTSHA256'});
+   }
+   waitpid($pid, 0);
+   $ret = $? >> 8;
+
+   $cmd = "$self->{'bin'} x509 -noout -fingerprint -sha384 -in $file";
+   $ext = "$cmd\n\n";
+   $pid = open3($wtfh, $rdfh, $rdfh, $cmd);
+   while(<$rdfh>){
+      $ext .= $_;
+      ($k, $v) = split(/=/);
+      $tmp->{'FINGERPRINTSHA384'} = $v if($k =~ /SHA384 Fingerprint/i);
+      chomp($tmp->{'FINGERPRINTSHA384'});
+   }
+   waitpid($pid, 0);
+   $ret = $? >> 8;
+
+   $cmd = "$self->{'bin'} x509 -noout -fingerprint -sha512 -in $file";
+   $ext = "$cmd\n\n";
+   $pid = open3($wtfh, $rdfh, $rdfh, $cmd);
+   while(<$rdfh>){
+      $ext .= $_;
+      ($k, $v) = split(/=/);
+      $tmp->{'FINGERPRINTSHA512'} = $v if($k =~ /SHA512 Fingerprint/i);
+      chomp($tmp->{'FINGERPRINTSHA512'});
+   }
+   waitpid($pid, 0);
+   $ret = $? >> 8;
+
+   if($ret) {
+      $t = _("Error reading fingerprint from Certificate");
+      GUI::HELPERS::print_warning($t, $ext);
+   }
+
    # get subject in openssl format
-   $cmd = "$self->{'bin'} x509 -noout -subject -in $file";
+   $cmd = "$self->{'bin'} x509 -nameopt utf8 -noout -subject -in $file";
    $ext = "$cmd\n\n";
    $pid = open3($wtfh, $rdfh, $rdfh, $cmd);
    while(<$rdfh>){
@@ -724,7 +767,10 @@ sub parsecert {
    }
 
    $self->{'CACHE'}->{$file} = $tmp;
-
+   
+   # ILSHAT
+   # use Data::Dumper;
+   # print Dumper($self);
    return($tmp);
 }
 
@@ -756,7 +802,7 @@ sub parsereq {
    $tmp->{'PEM'} .= $_ while(<IN>);
 
    ($ret, $tmp->{'TEXT'}, $ext) = $self->convdata(
-         'cmd'     => 'req',
+         'cmd'     => 'req -utf8 -nameopt utf8',
          'config'  => $config,
          'data'    => $tmp->{'PEM'},
          'inform'  => 'PEM',
@@ -817,7 +863,7 @@ sub convdata {
    my $self = shift;
    my $opts = { @_ };
    
-   my ($tmp, $ext, $ret, $file, $pid, $cmd);
+   my ($tmp, $ext, $ret, $file, $pid, $cmd, $cmdout, $cmderr);
    $file = HELPERS::mktmp($self->{'tmp'}."/data");
 
    $cmd = "$self->{'bin'} $opts->{'cmd'}";
@@ -830,16 +876,7 @@ sub convdata {
       $cmd .= " -outform $opts->{'outform'}";
    }
 
-   my($rdfh, $wtfh);
-   $ext = "$cmd\n\n";
-   $pid = open3($wtfh, $rdfh, $rdfh, $cmd);
-   print $wtfh "$opts->{'data'}\n";
-   while(<$rdfh>){
-      $ext .= $_;
-      # print STDERR "DEBUG: cmd ret: $_";
-   };
-   waitpid($pid, 0);
-   $ret = $?>>8;
+   ($ret, $tmp, $ext) = _run_with_fixed_input($cmd, $opts->{'data'});
 
    if($self->{'broken'}) {
        if(($ret != 0 && $opts->{'cmd'} ne 'crl') ||
@@ -859,14 +896,15 @@ sub convdata {
       }
    }
 
-   open(IN, $file) || do {
-      my $t = sprintf(_("Can't open file %s: %s"), $file, $!);
-      GUI::HELPERS::print_warning($t);
-      return;
-   };
-   $tmp .= $_ while(<IN>);
-   close(IN);
-
+   if (-s $file) { # If the file is empty, the payload is in $tmp (via STDOUT of the called process).
+      open(IN, $file) || do {
+         my $t = sprintf(_("Can't open file %s: %s"), $file, $!);
+         GUI::HELPERS::print_warning($t);
+         return;
+      };
+      $tmp .= $_ while(<IN>);
+      close(IN);
+   }
    unlink($file);
 
    return($ret, $tmp, $ext);
@@ -1076,4 +1114,72 @@ sub _get_index {
    }
 }
    
+
+=over
+
+=item _run_with_fixed_input($cmd, $input)
+
+This function runs C<$cmd> and writes the C<$input> to STDIN of the
+new process (all at once).
+
+While the command runs, all of its output to STDOUT and STDERR is
+collected.
+
+After the command terminates (closes both STDOUT and STDIN) the
+function returns the command's return value as well as everything it
+wrote to its STDOUT and STDERR in a list.
+
+=back
+
+=cut
+
+sub _run_with_fixed_input {
+   my $cmd = shift;
+   my $input = shift;
+
+   my ($wtfh, $rdfh, $erfh, $pid, $sel, $ret, $stdout, $stderr);
+   $erfh = Symbol::gensym; # Must not be false, otherwise it is lumped together with rdfh
+
+   # Run the command
+   $pid = open3($wtfh, $rdfh, $erfh, $cmd);
+   print $wtfh $input, "\n";
+
+   $stdout = '';
+   $stderr = '';
+   $sel = new IO::Select($rdfh, $erfh);
+   while (my @fhs = $sel->can_read()) {
+      foreach my $fh (@fhs) {
+         if ($fh == $rdfh) { # STDOUT
+            my $bytes_read = sysread($fh, my $buf='', 1024);
+            if ($bytes_read == -1) {
+               warn("Error reading from child's STDOUT: $!\n");
+               $sel->remove($fh);
+             } elsif ($bytes_read == 0) {
+               # print("Child's STDOUT closed.\n");
+               $sel->remove($fh);
+             } else {
+               $stdout .= $buf;
+             }
+         }
+         elsif ($fh == $erfh) { # STDERR
+            my $bytes_read = sysread($fh, my $buf='', 1024);
+            if ($bytes_read == -1) {
+               warn("Error reading from child's STDERR: $!\n");
+               $sel->remove($fh);
+            } elsif ($bytes_read == 0) {
+               # print("Child's STDERR closed.\n");
+               $sel->remove($fh);
+            } else {
+              $stderr .= $buf;
+            }
+         }
+      }
+   }
+
+   waitpid($pid, 0);
+   $ret = $?>>8;
+
+   return ($ret, $stdout, $stderr)
+   }
+
 1
