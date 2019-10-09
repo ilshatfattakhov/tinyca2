@@ -65,7 +65,7 @@ sub new {
 
    bless($self, $class);
 
-   $self->{'version'} = '0.7.5';
+   $self->{'version'} = '0.7.5-7';
 
    $self->{'words'} = GUI::WORDS->new();
 
